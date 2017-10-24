@@ -225,6 +225,9 @@ struct post_operation_visitor
             next_id = last_blog->blog_feed_id + 1;
          }
 
+         if( BOOST_UNLIKELY( op.author == "goldibex" ) )
+            ilog( "Encountered comment ${a}/${p}", ("a",op.author)("p",op.permlink) );
+
          if( comment_blog_idx.find( boost::make_tuple( c.id, op.author ) ) == comment_blog_idx.end() )
          {
             db.create< blog_object >( [&]( blog_object& b)
@@ -233,6 +236,9 @@ struct post_operation_visitor
                b.comment = c.id;
                b.blog_feed_id = next_id;
             });
+
+            if( BOOST_UNLIKELY( op.author == "goldibex" ) )
+               ilog( "created" );
 
             const auto& old_blog_idx = db.get_index< blog_index >().indices().get< by_old_blog >();
             auto old_blog = old_blog_idx.lower_bound( op.author );

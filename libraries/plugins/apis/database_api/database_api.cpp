@@ -4,6 +4,7 @@
 #include <steem/plugins/database_api/database_api_plugin.hpp>
 
 #include <steem/protocol/get_config.hpp>
+#include <steem/protocol/exceptions.hpp>
 
 namespace steem { namespace plugins { namespace database_api {
 
@@ -60,6 +61,7 @@ class database_api_impl
          (get_potential_signatures)
          (verify_authority)
          (verify_account_authority)
+         (verify_signatures)
       )
 
       template< typename ResultType >
@@ -1815,6 +1817,65 @@ DEFINE_API( database_api_impl, verify_account_authority )
    vap.trx.operations.emplace_back( op );
 
    return verify_authority( vap );
+}
+
+DEFINE_API( database_api, verify_signatures )
+{
+   return my->_db.with_read_lock( [&]()
+   {
+      return my->verify_signatures( args );
+   });
+}
+
+DEFINE_API( database_api_impl, verify_signatures )
+{
+   // get_signature_keys can throw for dup sigs. Allow this to throw.
+   flat_set< public_key_type > sig_keys;
+   for( const auto&  sig : args.signatures )
+   {
+      STEEM_ASSERT(
+         sig_keys.insert( fc::ecc::public_key( sig, args.hash ) ).second,
+         protocol::tx_duplicate_sig,
+         "Duplicate Signature detected" );
+   }
+
+   verify_signatures_return result;
+   result.valid = true;
+
+   // verify authority throws on failure, catch and return false
+   try
+   {
+      steem::protocol::verify_authority(
+         [&args]( flat_set< account_name_type >& required_active,
+                  flat_set< account_name_type >& required_owner,
+                  flat_set< account_name_type >& required_posting,
+                  vector< authority >& )
+         {
+            switch( args.auth_level )
+            {
+               case authority::owner:
+                  std::copy( args.accounts.begin(), args.accounts.end(), required_owner.end() );
+                  break;
+               case authority::active:
+                  std::copy( args.accounts.begin(), args.accounts.end(), required_active.end() );
+                  break;
+               case authority::posting:
+                  std::copy( args.accounts.begin(), args.accounts.end(), required_posting.end() );
+                  break;
+               case authority::key:
+               default:
+                  FC_ASSERT( false, "verify_signatures only supports owner, active, and posting auths" );
+            }
+         },
+         sig_keys,
+         [this]( const string& name ) { return authority( _db.get< chain::account_authority_object, chain::by_account >( name ).owner ); },
+         [this]( const string& name ) { return authority( _db.get< chain::account_authority_object, chain::by_account >( name ).active ); },
+         [this]( const string& name ) { return authority( _db.get< chain::account_authority_object, chain::by_account >( name ).posting ); },
+         STEEM_MAX_SIG_CHECK_DEPTH );
+   }
+   catch( fc::exception& ) { result.valid = false; }
+
+   return result;
 }
 
 } } } // steem::plugins::database_api

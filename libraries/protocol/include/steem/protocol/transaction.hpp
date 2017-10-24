@@ -91,7 +91,7 @@ namespace steem { namespace protocol {
       void clear() { operations.clear(); signatures.clear(); }
    };
 
-   void verify_authority( const vector<operation>& ops, const flat_set<public_key_type>& sigs,
+   void verify_authority( const required_authority_getter& get_required_authorities, const flat_set<public_key_type>& sigs,
                           const authority_getter& get_active,
                           const authority_getter& get_owner,
                           const authority_getter& get_posting,

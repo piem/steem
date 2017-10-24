@@ -125,6 +125,12 @@ class database_api
          * @return true if the signers have enough authority to authorize an account
          */
          (verify_account_authority)
+
+         /*
+          * This is a general purpose API that checks signatures against accounts for an arbitrary sha256 hash
+          * using the existing authority structures in Steem
+          */
+         (verify_signatures)
       )
 
    private:

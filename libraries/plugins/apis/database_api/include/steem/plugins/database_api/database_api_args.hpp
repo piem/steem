@@ -523,6 +523,19 @@ struct verify_account_authority_args
 
 typedef verify_authority_return verify_account_authority_return;
 
+struct verify_signatures_args
+{
+   fc::sha256                       hash;
+   vector< signature_type >         signatures;
+   vector< account_name_type >      accounts;
+   authority::classification        auth_level;
+};
+
+struct verify_signatures_return
+{
+   bool valid;
+};
+
 } } } // steem::database_api
 
 FC_REFLECT_ENUM( steem::plugins::database_api::sort_order_type,
@@ -733,3 +746,12 @@ FC_REFLECT( steem::plugins::database_api::verify_authority_return,
 FC_REFLECT( steem::plugins::database_api::verify_account_authority_args,
    (account)
    (signers) )
+
+FC_REFLECT( steem::plugins::database_api::verify_signatures_args,
+   (hash)
+   (signatures)
+   (accounts)
+   (auth_level) )
+
+FC_REFLECT( steem::plugins::database_api::verify_signatures_return,
+   (valid) )

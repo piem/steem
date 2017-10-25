@@ -254,6 +254,10 @@ struct smt_database_fixture : public clean_database_fixture
 
    asset_symbol_type create_smt( signed_transaction& trx, const string& account_name, const fc::ecc::private_key& key,
       uint8_t token_decimal_places );
+
+   typedef std::function< void(const asset_symbol_type& smt1, const asset_symbol_type& smt2, const asset_symbol_type& smt3) > TFollowUpOps;
+   /// Creates 3 different SMTs for provided control account, one with 0 precision, the other two with the same non-zero precision.
+   void create_smt_3( const char* control_account_name, const fc::ecc::private_key& key, TFollowUpOps followUpOps );
 };
 #endif
 

@@ -9,6 +9,7 @@
 #include <steem/chain/block_log.hpp>
 #include <steem/chain/operation_notification.hpp>
 #include <steem/chain/util/signal.hpp>
+#include <steem/chain/util/scheduler_event.hpp>
 
 #include <steem/protocol/protocol.hpp>
 #include <steem/protocol/hardfork.hpp>
@@ -29,11 +30,14 @@ namespace steem { namespace chain {
    using steem::protocol::asset_symbol_type;
    using steem::protocol::price;
 
+   using steem::chain::util::timed_event_object;
+
    class database_impl;
    class custom_operation_interpreter;
 
    namespace util {
       struct comment_reward_context;
+      class timed_event_scheduler;
    }
 
    /**
@@ -203,6 +207,7 @@ namespace steem { namespace chain {
          void notify_pre_apply_operation( operation_notification& note );
          void notify_post_apply_operation( const operation_notification& note );
          inline const void push_virtual_operation( const operation& op, bool force = false ); // vops are not needed for low mem. Force will push them on low mem.
+         void process_smt_operations( const signed_block& block );
          void notify_applied_block( const signed_block& block );
          void notify_on_pending_transaction( const signed_transaction& tx );
          void notify_on_pre_apply_transaction( const signed_transaction& tx );
@@ -412,6 +417,8 @@ namespace steem { namespace chain {
 
          const std::string& get_json_schema() const;
 
+         void add_scheduler_event( const time_point_sec& key, const timed_event_object& value );
+
          void set_flush_interval( uint32_t flush_blocks );
          void show_free_memory( bool force, uint32_t current_block_num );
 
@@ -491,6 +498,8 @@ namespace steem { namespace chain {
 
          flat_map< std::string, std::shared_ptr< custom_operation_interpreter > >   _custom_operation_interpreters;
          std::string                       _json_schema;
+
+         std::unique_ptr< util::timed_event_scheduler > scheduler;
    };
 
 } }

@@ -21,7 +21,7 @@
 #include <steem/chain/util/asset.hpp>
 #include <steem/chain/util/reward.hpp>
 #include <steem/chain/util/uint256.hpp>
-#include <steem/chain/util/reward.hpp>
+#include <steem/chain/util/scheduler.hpp>
 
 #include <fc/smart_ref_impl.hpp>
 #include <fc/uint128.hpp>
@@ -89,7 +89,7 @@ database_impl::database_impl( database& self )
    : _self(self), _evaluator_registry(self) {}
 
 database::database()
-   : _my( new database_impl(*this) )
+   : _my( new database_impl(*this) ), scheduler( new util::timed_event_scheduler( *this ) )
 {
    set_chain_id( STEEM_CHAIN_ID_NAME );
 }
@@ -924,6 +924,11 @@ inline const void database::push_virtual_operation( const operation& op, bool fo
    operation_notification note(op);
    notify_pre_apply_operation( note );
    notify_post_apply_operation( note );
+}
+
+void database::process_smt_operations( const signed_block& block )
+{
+   scheduler->run( block.timestamp );
 }
 
 void database::notify_applied_block( const signed_block& block )
@@ -2316,6 +2321,12 @@ const std::string& database::get_json_schema()const
    return _json_schema;
 }
 
+void database::add_scheduler_event( const time_point_sec& key, const timed_event_object& value )
+{
+   FC_ASSERT( scheduler );
+   scheduler->add( key, value );
+}
+
 void database::init_schema()
 {
    /*done_adding_indexes();
@@ -2726,6 +2737,9 @@ void database::_apply_block( const signed_block& next_block )
    notify_applied_block( next_block );
 
    notify_changed_objects();
+
+   process_smt_operations( next_block );
+
 } //FC_CAPTURE_AND_RETHROW( (next_block.block_num()) )  }
 FC_CAPTURE_LOG_AND_RETHROW( (next_block.block_num()) )
 }

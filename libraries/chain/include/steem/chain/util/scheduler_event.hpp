@@ -46,23 +46,8 @@ class scheduler_event
 
       scheduler_event( const asset_symbol_type& _symbol );
       ~scheduler_event();
-      virtual int run( database& db ) const = 0;
-};
 
-class scheduler_proxy: public scheduler_event
-{
-   private:
-   protected:
-
-      launch_action launcher;
-
-      bool is_min_steem_reached( database& db ) const;
-      bool is_hard_cap_revealed( database& db ) const;
-
-   public:
-
-      scheduler_proxy( const asset_symbol_type& _symbol );
-      ~scheduler_proxy();
+      virtual bool removing_allowed() const;
       virtual int run( database& db ) const = 0;
 };
 
@@ -84,17 +69,32 @@ class contribution_end_scheduler_event: public scheduler_event
       int run( database& db ) const override;
 };
 
-class launch_scheduler_event: public scheduler_proxy
+class launch_scheduler_event: public scheduler_event
 {
    private:
+
+      mutable bool first_check = true;
+      mutable bool removing_allowed_status = false;
+
+      launch_action launcher;
+      refund_action refunder;
+
+      bool is_min_steem_reached( database& db ) const;
+      bool are_hidden_elements_revealed( database& db ) const;
+
+   protected:
+
+
    public:
 
       launch_scheduler_event( const asset_symbol_type& _symbol );
       ~launch_scheduler_event();
+
+      virtual bool removing_allowed() const override;
       int run( database& db ) const override;
 };
 
-class launch_expiration_scheduler_event: public scheduler_proxy
+class launch_expiration_scheduler_event: public scheduler_event
 {
    private:
 
@@ -118,6 +118,7 @@ typedef fc::static_variant<
 struct scheduler_event_visitor
 {
    database& db;
+   mutable bool removing_allowed_status;
 
    typedef void result_type;
 
@@ -137,10 +138,6 @@ struct scheduler_event_visitor
 FC_REFLECT(
    steem::chain::util::scheduler_event,
    (symbol)
-   )
-
-FC_REFLECT_EMPTY(
-   steem::chain::util::scheduler_proxy
    )
 
 FC_REFLECT_EMPTY(

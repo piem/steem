@@ -48,8 +48,7 @@ void timed_event_scheduler_impl::add( const time_point_sec& key, const timed_eve
 
 void timed_event_scheduler_impl::run( const time_point_sec& head_block_time )
 {
-   const auto& begin = events->upper_bound( head_block_time );
-   const auto& it = begin;
+   auto it = events->upper_bound( head_block_time );
 
    const auto& end = events->end();
 
@@ -58,9 +57,9 @@ void timed_event_scheduler_impl::run( const time_point_sec& head_block_time )
    while( it!=end )
    {
       it->second.visit( visitor );
+      if( visitor.removing_allowed_status )
+         it = events->erase( it );
    }
-
-   events->erase( begin, end );
 }
 
 timed_event_scheduler::timed_event_scheduler( database& _db )

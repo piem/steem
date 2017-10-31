@@ -48,6 +48,11 @@ scheduler_event::~scheduler_event()
 
 }
 
+bool scheduler_event::removing_allowed() const
+{
+   return true;
+}
+
 const smt_token_object* scheduler_event::get_smt_token_object( database& db ) const
 {
    const smt_token_object* ret = db.find< smt_token_object, by_symbol >( symbol );
@@ -64,29 +69,6 @@ void scheduler_event::change_phase( database& db, const smt_token_object* token,
    {
       token.phase = phase;
    });
-}
-
-scheduler_proxy::scheduler_proxy( const asset_symbol_type& _symbol )
-               : scheduler_event( _symbol )
-{
-
-}
-
-scheduler_proxy::~scheduler_proxy()
-{
-
-}
-
-bool scheduler_proxy::is_min_steem_reached( database& db ) const
-{
-   //Check if we have enough STEEM-s.
-   return true;
-}
-
-bool scheduler_proxy::is_hard_cap_revealed( database& db ) const
-{
-   //Check if hard cap is revealed.
-   return true;
 }
 
 contribution_begin_scheduler_event::contribution_begin_scheduler_event( const asset_symbol_type& _symbol )
@@ -136,7 +118,7 @@ int contribution_end_scheduler_event::run( database& db ) const
 }
 
 launch_scheduler_event::launch_scheduler_event( const asset_symbol_type& _symbol )
-                              : scheduler_proxy( _symbol )
+                              : scheduler_event( _symbol )
 {
 
 }
@@ -146,6 +128,23 @@ launch_scheduler_event::~launch_scheduler_event()
 
 }
 
+bool launch_scheduler_event::removing_allowed() const
+{
+   return removing_allowed_status;
+}
+
+bool launch_scheduler_event::is_min_steem_reached( database& db ) const
+{
+   //Check if we have enough STEEM-s.
+   return true;
+}
+
+bool launch_scheduler_event::are_hidden_elements_revealed( database& db ) const
+{
+   //Check if hard cap and min steem are both revealed.
+   return true;
+}
+
 int launch_scheduler_event::run( database& db ) const
 {
    int ret = 0;
@@ -153,29 +152,32 @@ int launch_scheduler_event::run( database& db ) const
    const smt_token_object* obj = scheduler_event::get_smt_token_object( db );
    FC_ASSERT( obj );
 
-   change_phase( db, obj, smt_token_object::smt_phase::launch_time_completed );
-
-   bool check_min_steems = is_min_steem_reached( db );
-   if( !check_min_steems )
+   bool _are_hidden_elements_revealed = are_hidden_elements_revealed( db );
+   if( _are_hidden_elements_revealed )
    {
-      db.add_scheduler_event( obj->launch_expiration_time, util::launch_expiration_scheduler_event( symbol ) );
-   }
-   else
-   {
-      bool check_hard_cap = is_hard_cap_revealed( db );
-      if( check_hard_cap )
-         ret = launcher.run( db );
-      else
+      bool _is_min_steem_reached = is_min_steem_reached( db );
+      if( _is_min_steem_reached )
       {
-         db.add_scheduler_event( obj->launch_expiration_time, util::launch_expiration_scheduler_event( symbol ) );
+         removing_allowed_status = true;
+         change_phase( db, obj, smt_token_object::smt_phase::launch_time_completed );
+
+         ret = launcher.run( db );
       }
+      else
+         ret = refunder.run( db );
+   }
+
+   if( first_check )
+   {
+      first_check = false;
+      db.add_scheduler_event( obj->launch_expiration_time, util::launch_expiration_scheduler_event( symbol ) );
    }
 
    return ret;
 }
 
 launch_expiration_scheduler_event::launch_expiration_scheduler_event( const asset_symbol_type& _symbol )
-                              : scheduler_proxy( _symbol )
+                              : scheduler_event( _symbol )
 {
 
 }
@@ -194,23 +196,14 @@ int launch_expiration_scheduler_event::run( database& db ) const
 
    change_phase( db, obj, smt_token_object::smt_phase::launch_expiration_time_completed );
 
-   bool check_min_steems = is_min_steem_reached( db );
-   if( !check_min_steems )
+   if( obj->phase != smt_token_object::smt_phase::launch_time_completed )
       ret = refunder.run( db );
-   else
-   {
-      bool check_hard_cap = is_hard_cap_revealed( db );
-      if( check_hard_cap )
-         ret = launcher.run( db );
-      else
-         refunder.run( db );
-   }
 
    return ret;
 }
 
 scheduler_event_visitor::scheduler_event_visitor( database& _db )
-                     : db( _db )
+                     : db( _db ), removing_allowed_status( true )
 {
 }
 
@@ -218,24 +211,28 @@ void scheduler_event_visitor::operator()( const contribution_begin_scheduler_eve
 {
    int status = contribution_begin.run( db );
    FC_ASSERT( status == 0 );
+   removing_allowed_status = contribution_begin.removing_allowed();
 }
 
 void scheduler_event_visitor::operator()( const contribution_end_scheduler_event& contribution_end ) const
 {
    int status = contribution_end.run( db );
    FC_ASSERT( status == 0 );
+   removing_allowed_status = contribution_end.removing_allowed();
 }
 
 void scheduler_event_visitor::operator()( const launch_scheduler_event& launch ) const
 {
    int status = launch.run( db );
    FC_ASSERT( status == 0 );
+   removing_allowed_status = launch.removing_allowed();
 }
 
 void scheduler_event_visitor::operator()( const launch_expiration_scheduler_event& expiration_launch ) const
 {
    int status = expiration_launch.run( db );
    FC_ASSERT( status == 0 );
+   removing_allowed_status = expiration_launch.removing_allowed();
 }
 
 template < typename T >
